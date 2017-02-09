@@ -1,0 +1,534 @@
+import Router from 'koa-router';
+
+import indexCtrl from '../controllers/indexCtrl';
+import authCtrl from '../controllers/authCtrl';
+import recordingCtrl from '../controllers/recordingCtrl';
+import depositCtrl from '../controllers/depositCtrl';
+import commonCtrl from '../controllers/commonCtrl';
+import expenseCtrl from '../controllers/expenseCtrl';
+import refundCtrl from '../controllers/refundCtrl';
+import incomeCtrl from '../controllers/incomeCtrl';
+import statsQueryCtrl from '../controllers/statsQueryCtrl';
+import syncCtrl from '../controllers/syncCtrl';
+
+
+const common = new Router();
+const router = new Router();
+
+export default (app) => {
+  common.get('*', indexCtrl.index);
+  common.get('/api/auth/login', authCtrl.getCurrentUser);
+  common.post('/api/auth/login', authCtrl.login);
+  common.all('/api/auth/logout', authCtrl.logout);
+
+  /**
+   * {首页} - 首页统计
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/stats/home
+   */
+  router.get('/api/v1/stats/home', commonCtrl.homeStatistics);
+
+  /**
+   * {产权转让} - 获取房屋列表
+   * @query  {String} communityId 小区 id，可选
+   * @query  {String} buildingId  楼栋 id，可选
+   * @query  {String} unitNo      单元号，模糊查询，可选
+   * @query  {String} houseNo     房号，模糊查询，可选
+   * @query  {String} name        业主姓名，模糊查询，可选
+   * @query  {String} from        开始查询条数，默认从0开始，可选
+   * @query  {String} to          结束查询条数，默认不限，可选
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/houses/transfer?communityId=111&buildingId=2222&unitNo=3&houseNo=3&name=5
+   */
+  router.get('/api/v1/houses/transfer', recordingCtrl.getHouseList);
+
+  /**
+   * {产权转让} - 产权转让
+   * @query  {String} houseId     房屋 id
+   * @body   {Object}             新业主对象
+   * @throws {Object} error       错误信息
+   * @example
+   *   /api/v1/houses/transfer?houseId=111
+   *   body: [newOwner]
+   */
+  router.put('/api/v1/houses/transfer', recordingCtrl.transferOwner);
+
+  /**
+   * {小区管理} - 确认同步小区信息列表
+   * @query  {String} type 数据类型，如Community，Building，House
+   * @body   {Array} remove 确认删除的数据列表
+   * @body   {Array} update 经过修改并确认的数据列表
+   * @return {Array} data 没有确认成功，需要再次编辑修改提交的数据；若全部确认成功，该列表为空
+   * @return {Object} page 分页信息
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/syncDatas/save?type=Community
+   */
+  router.put('/api/v1/syncDatas/save', recordingCtrl.saveSyncDatas);
+
+  /**
+   * {数据导入} - 导入 excel 文件（小区、楼栋、房屋）
+   * @query  {String} type  数据类型，如Community，Building，House
+   * @body   {File}         导入文件
+   * @return {Array} data   待确认小区列表信息
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/files/import?type=Community
+   */
+  router.post('/api/v1/files/import', recordingCtrl.importExcel);
+  /**
+   * {数据导入} - 修改导入未提交数据（小区、楼栋、房屋）
+   * @query  {String} type  数据类型，如Community，Building，House
+   * @query  {String} id     修改记录id
+   * @body   {Object} updateInfo     修改内容
+   * @return {Object}  data   修改记录
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/files/import/update?type=Community&id=123255
+   *   body: {communityName: [communityName]}
+   */
+  router.put('/api/v1/files/import/update', recordingCtrl.updateImport);
+
+  /**
+   * {数据导入} - 提交导入数据（小区、楼栋、房屋）
+   * @query  {String} type  数据类型，如Community，Building，House
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/files/import/saveAll?type=Community
+   */
+  router.put('/api/v1/files/import/saveAll', recordingCtrl.saveAllImport);
+
+  /**
+   * {数据导入} - 提交导入数据（小区、楼栋、房屋）
+   * @query  {String} type  数据类型，如Community，Building，House
+   * @body   {Array}        确认导入id数据列表
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/files/import/saveMulti?type=Community
+   *   body: ['12323','123123']
+   */
+  router.put('/api/v1/files/import/saveMulti', recordingCtrl.saveMultiImport);
+  /**
+   * {房屋导出} - 小区房屋信息导出
+   * @body  {Array} ids           选中导出房屋id列表
+   * @return {Object}  data       导出结果
+   * @throws {Object} error      错误信息
+   * @example
+   *   /api/v1/files/export?type=House
+   */
+  router.get('/api/v1/files/export', recordingCtrl.exportExcel);
+  /**
+   * {获取房屋} - 获取已选择房屋数据
+   * @params {String} type   模型类型(Deposit,Expense ...)
+   * @body   {Object}   condition   检索条件
+   * @throws {Object} error 错误信息
+   * @return {Array} data   房屋列表
+   * @example
+   *   /api/v1/housesCheck/Deposit
+   *   body: {bizNo: bizNo, community: [id]}
+   */
+  router.post('/api/v1/houses/getSelect/:type', commonCtrl.getHousesCheck);
+  /**
+   * {资金缴存} - 选择房屋
+   * @query  {String}  bizNo 缴存单号
+   * @body   {Object}   {houseIds:[]}   房屋id列表
+   * @return {Array} data   缴存明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/houses/select/123
+   */
+  router.post('/api/v1/houses/select/:bizNo', depositCtrl.selectHouses);
+  /**
+   * {资金缴存} - 导入 缴存 excel 文件
+   * @query  {String} bizNo 缴存流水单号
+   * @body   {File}         导入文件
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/houses/import/JC334343443
+   */
+  router.post('/api/v1/houses/import/:bizNo', depositCtrl.importDepositExcel);
+  //router.post('/api/v1/houses/import', depositCtrl.getHousesImport);
+
+   /**
+   * {资金缴存} - 维修支用打印
+   * @param {String}      bizNo 缴存单号
+   * @return {Array}       打印数据
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/deposit/print/12313
+   */
+  router.get('/api/v1/deposit/print/:bizNo', depositCtrl.getPrintDatas);
+  /**
+   * {维修支用} - 业主批量签字
+   * @param  {String}    bizNo 维修单号
+   * @body  {Object}  {isSign:isSign} 是否同意签字
+   * @return {Array} data   分摊明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/houses/expenses/sign/12325
+   *   {signed: 0}
+   */
+  router.put('/api/v1/expenses/allSign/:bizNo', expenseCtrl.allSign);
+   /**
+   * {维修支用} - 业主批量签字
+   * @param  {String}    bizNo 维修单号
+   * @body  {Object}  {isSign:isSign,ids:[]} 是否同意签字
+   * @return {Array} data   分摊明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/houses/expenses/sign/12325
+   *   {signed: 0}
+   */
+  router.put('/api/v1/expenses/multiSign', expenseCtrl.multiSign);
+  /**
+   * {维修支用} - 选择分摊
+   * @param  {String}  bizNo 维修单号
+   * @query  {String}  community 小区id
+   * @body   {Array}      房屋id列表
+   * @return {Array} data   分摊明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/select/123?community=123123
+   *   query:{community: [communityID]}
+   *   body ['1234','3434',...]
+   */
+  router.put('/api/v1/expenses/select/:bizNo', expenseCtrl.selectHouses);
+  /**
+   * {维修支用} - 选择历史分摊
+   * @param  {String}  bizNo 当前维修单号
+   * @body  {Object}    {expenseId:123}历史支用id
+   * @return {Array} data   分摊明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/select/123
+   *   body {expenseId: '42424'}
+   */
+  router.put('/api/v1/expenses/hisSelect/:bizNo', expenseCtrl.selectHistory);
+  /**
+   * {维修支用} - 文件上传
+   * @query {String}  bizNo 支用id
+   * @query {String}  type 文件类型
+   * @body   {File}         导入文件
+   * @return {String}       导入结果
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/prospect/upload?bizNo='123123&type=Inspect
+   */
+  router.post('/api/v1/expenses/file/upload', expenseCtrl.uploadProspect);
+  /**
+   * {维修支用} - 文件下载
+   * @param {String}      id 文件id
+   * @return {String}       下载结果
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/prospect/download/12313
+   */
+  router.get('/api/v1/expenses/file/download/:id', expenseCtrl.downloadProspect);
+
+  /**
+   * {维修支用} - 文件删除
+   * @param {String} id  文件id
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/prospect/remove/123213
+   */
+  router.del('/api/v1/expenses/file/remove/:id', expenseCtrl.removeProspect);
+  /**
+   * {维修支用} - 拨款发起及审核
+   * @param  {String}  id 支用id
+   * @body  {Object}  content 确认详情
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/grantConfirm/123
+   */
+  router.put('/api/v1/expenses/grantApply/:id', expenseCtrl.grantApply);
+  /**
+   * {维修支用} - 拨款划转/银行端确认
+   * @param  {String}  id 支用id
+   * @body  {Object}  content 确认详情
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/grantConfirm/123
+   */
+  router.put('/api/v1/expenses/grantConfirm/:id', expenseCtrl.grantConfirm);
+  /**
+   * {维修支用} - 项目决算
+   * @param  {String}    id 支用id
+   * @body  {Object}  {finalAmount: [finalAmount]} 决算金额
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/updateFinalAmount/12325
+   *   {finalAmount: 10000}
+   */
+  router.put('/api/v1/expenses/updateFinalAmount/:id', expenseCtrl.updateFinalAmount);
+
+   /**
+   * {维修支用} - 分摊清册打印
+   * @param {String}      bizNo 支用单号
+   * @return {Array}       打印数据
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/deposit/print/12313
+   */
+  router.get('/api/v1/expense/print/:bizNo', expenseCtrl.getPrintDatas);
+  /**
+   * {退款} - 选择分摊
+   * @param  {String}  bizNo 退款单号
+   * @query  {String}  community 小区id
+   * @body   {Array}      房屋id列表
+   * @return {Array} data   分摊明细
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/refund/select/123?community=123123
+   *   query:{community: [communityID]}
+   *   body ['1234','3434',...]
+   */
+  router.post('/api/v1/refund/select/:bizNo', refundCtrl.selectHouses);
+  /**
+   * {退款} - 退款划转
+   * @body   {Array}   ids     退款 id 列表
+   * @throws {Object}  error   错误信息
+   * @example
+   *   /api/v1/refund/payOut
+   */
+  router.put('/api/v1/refund/payOut');
+  /**
+   * {统计查询} - 个人账户查询
+   * @query  {Object} communityId  小区id
+   * @query  {Object} buildingId  小区id
+   * @query  {Object} houseId  小区id
+   * @query  {Object} condition  业主姓名或账号
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/statsQuery/subAccts?communityId=[cid]&buildingId=[bid]&houseId=[hid]&conditon=[cond]
+   */
+  router.get('/api/v1/statsQuery/subAccts', statsQueryCtrl.getSubAcctList);
+  /**
+   * {统计查询} - 小区统计查询
+   * @query  {Object} community  小区id
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/statsQuery/commStats?community=Community
+   */
+  router.get('/api/v1/statsQuery/commStats', statsQueryCtrl.getCommStatsList);
+   /**
+   * {统计查询} - 小区楼栋统计查询
+   * @query  {Object} community  小区id
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/statsQuery/commStats?community=Community
+   */
+  router.get('/api/v1/statsQuery/commBuildStats', statsQueryCtrl.getCommBuildStatsList);
+
+   /**
+   * {统计查询} - 维修资金综合统计查询
+   * @query  {Number} queryYear  年
+   * @query  {Number} quater  季度
+   * @query  {Object} range   范围 (from to)
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/statsQuery/commStats?community=Community
+   */
+  router.get('/api/v1/statsQuery/maintAmtStats', statsQueryCtrl.getMaintAmtStatsList);
+
+  /**
+   * {数据导入} - 删除导入数据（小区、楼栋、房屋）
+   * @query  {String} type  数据类型，如Community，Building，House
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/files/import/removeAll?type=Community
+   */
+  router.del('/api/v1/files/import/removeAll', recordingCtrl.removeAllImport);
+  /**
+   * {用户管理} - 修改密码
+   * @param  {Number} id    用户id
+   * @body   {Object}       origin_pass原密码, new_pass新密码
+   * @return {Object} user  用户信息
+   * @throws {Object} error 错误信息
+   */
+  router.put('/api/v1/users/changePassword/:id', authCtrl.changePassword);
+  /**
+   * {用户管理} - 用户密码匹配
+   * @body   {Object}       userId 用户id, password 密码
+   * @return {Object} isMathched  是否匹配
+   * @throws {Object} error 错误信息
+   */
+  router.post('/api/v1/users/passwordMatches', authCtrl.passwordMatches);
+  /**
+   * {系统管理} - 用户管理 重置密码
+   * @param  {String}  id 用户id
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/expenses/updateAmount/123
+   *   body {finalAmount:123}
+   */
+  router.put('/api/v1/sys/reset', authCtrl.resetPassWord);
+   /**
+   * {系统管理} - 权限管理 获取权限列表
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/sys/roles
+   */
+  router.get('/api/v1/sys/roles', authCtrl.getRoleList);
+  /**
+   * {系统管理} - 权限管理 设置菜单权限
+   * @param  {String}  id               角色id
+   * @param  {String}  permissionType   权限类型, menu菜单权限，ops功能权限
+   * @body   {Array}                    可用权限id列表
+   * @throws {Object} error             错误信息
+   * @example
+   *   /api/v1/sys/roles/123/menu
+   *   body [123]
+   */
+  router.put('/api/v1/sys/roles/:id/:permissionType', authCtrl.setRolePermission);
+  // router.get('/api/v1/recording/syncData', recordingCtrl.syncData);
+
+  //router.post('/api/v1/buildings/import', recordingCtrl.importExcel);
+  //router.put('/api/v1/buildings/import/save', recordingCtrl.saveExcel);
+
+  //router.post('/api/v1/houses/import', recordingCtrl.importExcel);
+  //router.put('/api/v1/houses/import/save', recordingCtrl.saveExcel);
+
+  //router.post('/api/v1/comittees/import', recordingCtrl.importExcel);
+  //router.put('/api/v1/comittees/import/save', recordingCtrl.saveExcel);
+
+  //router.post('/api/v1/developers/import', recordingCtrl.importExcel);
+  //router.put('/api/v1/developers/import/save', recordingCtrl.saveExcel);
+
+  //router.post('/api/v1/properties/import', recordingCtrl.importExcel);
+  //router.put('/api/v1/properties/import/save', recordingCtrl.saveExcel);
+
+  /**
+   * {投资管理} - 投资资金统计
+   * @return {Number} unmatureCount    在途投资笔数
+   * @return {Number} unmatureAmt      在途投资金额
+   * @return {Number} unmatureIncome   预期收益总额
+   * @return {Number} matureIncome     到期收益总额
+   * @throws {Object} error            错误信息
+   */
+  router.get('/api/v1/investments/stats', incomeCtrl.investmentStats);
+
+  /**
+   * {结息管理} - 结息试算
+   * @query  {Object} keyword         关键词：账户名/账号，可选
+   * @query  {Object} range           分页条件，可选，形如 { "from": 1, "to": 300 }
+   * @body   {String} mainAcct        专户id
+   * @body   {Date}   settleDate      结息时间
+   * @return {Array}  data            结息明细
+   * @return {Object} stats           结息统计
+   * @throws {Object} error           错误信息
+   * @example
+   *   /api/v1/intSettleInfos/trial
+   *   body {
+   *     mainAcct: '3443434jiuhjih5uu55',
+   *     settleDate: new Date(),
+   *   }
+   */
+  router.post('/api/v1/intSettleInfos/trial', incomeCtrl.genIntSettleDetails);
+  /**
+   * {结息管理} - 保存结息
+   * @body   {String} mainAcct        专户id
+   * @body   {Date}   settleDate      结息时间
+   * @return {Array}  data            结息明细
+   * @return {Object} stats           结息统计
+   * @return {Object} page            分页信息
+   * @throws {Object} error           错误信息
+   * @example
+   *   /api/v1/intSettleInfos?keyword='111111'&range={ from: 1, to: 300 }
+   *   body {
+   *     mainAcct: '3443434jiuhjih5uu55',
+   *     settleDate: new Date(),
+   *   }
+   */
+  router.post('/api/v1/intSettleInfos', incomeCtrl.createIntSettleInfo);
+
+  /**
+   * {投资收益} - 分摊试算]
+   * @query  {Object} keyword         关键词：账户名/账号，可选
+   * @query  {Object} range           分页条件，可选，形如 { "from": 1, "to": 300 }
+   * @body   {String} mainAcct        专户id
+   * @body   {Date}   distrTime       分摊时间
+   * @body   {Number} plannedAmount   计划分摊金额
+   * @body   {String} distrMethod     分摊方式id
+   * @body   {Array}  holderTypes     房屋账户类型列表
+   * @return {Array}  data            分摊明细
+   * @return {Object} stats           分摊分摊统计
+   * @throws {Object} error           错误信息
+   * @example
+   *   /api/v1/distrInfos/trial
+   *   body {
+   *     mainAcct: '3443434jiuhjih5uu55',
+   *     distrTIme: new Date(),
+   *     distrMethod: '33fffss22',
+   *     holderTypes: ['O', 'D', 'P', 'C'],
+   *   }
+   */
+  router.post('/api/v1/distrInfos/trial', incomeCtrl.genDistrDetails);
+  /**
+   * {投资收益} - 确认分摊]
+   * @body   {String} mainAcct        专户id
+   * @body   {Date}   distrTime       分摊时间
+   * @body   {Number} plannedAmount   计划分摊金额
+   * @body   {String} distrMethod     分摊方式id
+   * @body   {Array}  holderTypes     房屋账户类型列表
+   * @return {Array}  data            分摊明细
+   * @return {Object} stats           分摊分摊统计
+   * @return {Object} page            分页信息
+   * @throws {Object} error           错误信息
+   * @example
+   *   /api/v1/distrInfos?keyword='111111'&range={ from: 1, to: 300 }
+   *   body {
+   *     mainAcct: '3443434jiuhjih5uu55',
+   *     distrTIme: new Date(),
+   *     distrMethod: '33fffss22',
+   *     holderTypes: ['O', 'D', 'P', 'C'],
+   *   }
+   */
+  router.post('/api/v1/distrInfos', incomeCtrl.createDistrInfo);
+
+  /**
+   * {数据同步} - 更新单条同步数据
+   * @query  {String} type  数据类型，如Developer，Community，Building，House
+   * @query  {String} id    同步数据id
+   * @body   {Object}       更新内容
+   * @return {Object}       更新后的数据
+   * @throws {Object} error 错误信息
+   * @example
+   *   /api/v1/sync/update?type=Community&id=11111
+   */
+  router.put('/api/v1/sync/update', syncCtrl.updateSyncData);
+
+  /**
+   * {数据同步} - 提交多条同步数据
+   * @query  {String} type             数据类型，如Developer，Community，Building，House, Owner
+   * @query  {String} handleCommunity  是否为处理独栋，handleCommunity=1是，0或不填为否
+   * @query  {String} ignore           是否忽略，ignore=1是，0或不填为否
+   * @body   {Object}                  提交数据id列表，不填处理所有待提交同步数据
+   * @throws {Object} error            错误信息
+   * @example
+   *   /api/v1/sync/saveMulti?type=Community
+   *   body: ['111', '2222', '3333']
+   */
+  router.put('/api/v1/sync/saveMulti', syncCtrl.submitSyncDatas);
+
+  /**
+   * {数据同步} - 提交多条同步数据
+   * @query  {String} type  数据类型，如Developer，Community，Building，House, Owner
+   * @query  {String} handleCommunity  是否为处理独栋，handleCommunity=1是，0或不填为否
+   * @query  {String} ignore           是否忽略，ignore=1是，0或不填为否
+   * @throws {Object} error            错误信息
+   * @example
+   *   /api/v1/sync/saveAll?type=Community
+   */
+  router.put('/api/v1/sync/saveAll', syncCtrl.submitAllSyncDatas);
+
+  app
+    .use(common.routes())
+    .use(common.allowedMethods());
+
+  app
+    .use(router.routes())
+    .use(router.allowedMethods());
+};
